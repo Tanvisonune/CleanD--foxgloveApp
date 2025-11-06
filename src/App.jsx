@@ -9,8 +9,10 @@ import {
 
 const CleaningBotInterface = () => {
   // 🔌 States
-  const [ipAddress, setIpAddress] = useState("");
-  const [userURL, setUserURL] = useState("");
+
+  const defaultURL = import.meta.env.VITE_FOXGLOVE_URL;
+const [ipAddress, setIpAddress] = useState(defaultURL || "");
+
   const [isFoxgloveConnected, setIsFoxgloveConnected] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState(null);
   const [waterLevel, setWaterLevel] = useState(null);
