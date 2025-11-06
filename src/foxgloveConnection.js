@@ -6,22 +6,27 @@ let reconnectTimer = null;
 
 /**
  * Connect to the Foxglove Bridge via WebSocket
- * @param {string} url - The WebSocket URL entered by the user (e.g. ws://10.75.114.230:8765 or wss://cleandbot-ros2.ngrok.io)
+ * @param {string} url - The WebSocket URL (e.g. ws://10.75.114.230:8765 or wss://cleandbot-ros2.ngrok.io)
  * @param {function} onMessage - Callback when a new ROS message is received
  */
 export function connectToFoxglove(url, onMessage) {
+  if (typeof window === "undefined") {
+    // 🧱 Prevent running during Vercel build
+    console.warn("⏭️ Foxglove connection skipped: not running in browser.");
+    return;
+  }
+
   if (!url) {
-    console.error("❌ WebSocket URL not provided!");
     alert("Please enter your Foxglove Bridge IP or URL first!");
     return;
   }
 
-  // If already connected, close old socket
+  // If already connected, close the old socket
   if (socket) {
     try {
       socket.close();
     } catch (err) {
-      console.warn("⚠️ Error closing old socket:", err);
+      console.warn("⚠️ Error closing previous socket:", err);
     }
   }
 
@@ -29,7 +34,7 @@ export function connectToFoxglove(url, onMessage) {
   socket = new WebSocket(url);
 
   socket.onopen = () => {
-    console.log("✅ Connected to Foxglove Bridge");
+    console.log("✅ Connected to Foxglove Bridge:", url);
   };
 
   socket.onmessage = (event) => {
@@ -48,9 +53,10 @@ export function connectToFoxglove(url, onMessage) {
     }
   };
 
-  socket.onclose = () => {
-    console.log("🔴 Disconnected from Foxglove Bridge");
-    attemptReconnect(url, onMessage);
+  socket.onclose = (evt) => {
+    console.log("🔴 Foxglove connection closed", evt.reason || "");
+    // only auto-reconnect if user didn’t manually disconnect
+    if (socket !== null) attemptReconnect(url, onMessage);
   };
 }
 
@@ -86,9 +92,14 @@ export function sendToFoxglove(topic, data) {
 export function disconnectFoxglove() {
   if (socket) {
     console.log("🔌 Closing Foxglove connection manually");
-    socket.close();
-    socket = null;
+    try {
+      socket.close();
+    } catch (err) {
+      console.warn("⚠️ Error while closing socket:", err);
+    }
   }
+  socket = null;
+
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;

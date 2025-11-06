@@ -9,10 +9,12 @@ import {
 
 const CleaningBotInterface = () => {
   // 🔌 States
+  // ✅ Read from environment variable
+const defaultURL = import.meta.env.VITE_FOXGLOVE_URL || "";
+const [ipAddress, setIpAddress] = useState(defaultURL);
+const [userURL, setUserURL] = useState("");
 
-  const defaultURL = import.meta.env.VITE_FOXGLOVE_URL;
-const [ipAddress, setIpAddress] = useState(defaultURL || "");
-
+  
   const [isFoxgloveConnected, setIsFoxgloveConnected] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState(null);
   const [waterLevel, setWaterLevel] = useState(null);
