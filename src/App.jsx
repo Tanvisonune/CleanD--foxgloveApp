@@ -6,6 +6,17 @@ import {
   sendToFoxglove,
   disconnectFoxglove,
 } from "./foxgloveConnection";
+const speak = (text) => {
+  if ("speechSynthesis" in window) {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1;
+    utter.pitch = 1;
+    utter.lang = "en-US";
+    window.speechSynthesis.speak(utter);
+  } else {
+    console.warn("Speech synthesis not supported in this browser");
+  }
+};
 
 const CleaningBotInterface = () => {
   // 🔌 States
@@ -27,6 +38,55 @@ const [userURL, setUserURL] = useState("");
   const [currentMode, setCurrentMode] = useState("auto");
   const [currentScreen, setCurrentScreen] = useState("dashboard");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+
+  const handleConnect = () => {
+  let url = userURL.trim();
+
+  // 🧠 Auto-upgrade to wss:// if site is https
+  if (window.location.protocol === "https:" && url.startsWith("ws://")) {
+    url = url.replace("ws://", "wss://");
+  }
+
+  console.log("🧠 Connecting to Foxglove Bridge:", url);
+
+  try {
+    const socket = new WebSocket(url);
+
+    socket.onopen = () => {
+      console.log("✅ Connected to Foxglove Bridge!");
+      setIsFoxgloveConnected(true);
+    };
+
+    socket.onclose = () => {
+      console.log("❌ Disconnected");
+      setIsFoxgloveConnected(false);
+    };
+
+    socket.onerror = (err) => {
+      console.error("⚠️ WebSocket error:", err);
+      setIsFoxgloveConnected(false);
+    };
+  } catch (err) {
+    console.error("Error creating WebSocket:", err);
+  }
+};
+
+<div style={{ textAlign: "center", marginTop: 20 }}>
+  <input
+    type="text"
+    value={userURL}
+    onChange={(e) => setUserURL(e.target.value)}
+    placeholder="Enter WSS or WS URL (e.g., ws://192.168.1.10:8765)"
+    style={{ padding: "8px", width: "80%", borderRadius: "8px" }}
+  />
+  <button
+    onClick={handleConnect}
+    style={{ marginLeft: "10px", padding: "8px 16px", borderRadius: "8px" }}
+  >
+    Connect
+  </button>
+</div>
 
   // 🧠 Foxglove Bridge
   const handleFoxgloveMessage = useCallback((msg) => {
@@ -53,9 +113,17 @@ const [userURL, setUserURL] = useState("");
 
   // 🕹️ Control Handlers
   const handleCleaningControl = (action) => {
-    const ok = sendToFoxglove("/clean_control", { action });
-    if (ok) alert(`✅ Sent '${action}' command to robot`);
-  };
+  const ok = sendToFoxglove("/clean_control", { action });
+  if (ok) {
+    const voiceMsg = {
+      start: "Starting cleaning process",
+      pause: "Pausing cleaning",
+      stop: "Stopping cleaning",
+      resume: "Resuming cleaning",
+    }[action] || `Executing ${action}`;
+    speak(voiceMsg);
+  }
+};
 
   const handleModeSelection = (mode) => {
     setCurrentMode(mode);

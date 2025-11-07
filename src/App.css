@@ -243,6 +243,46 @@
   font-size: clamp(10px, 2.5vw, 12px);
   opacity: 0.8;
 }
+/* ================================
+   🕹️ Manual Control (Foxglove Style)
+   ================================ */
+.control-btn {
+  width: 80px;
+  height: 80px;
+  font-size: 26px;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #2ecc71, #1abc9c);
+  color: white;
+  cursor: pointer;
+  transition: all 0.25s ease-in-out;
+  box-shadow: 0 0 20px rgba(46, 204, 113, 0.4);
+}
+
+.control-btn:hover {
+  transform: scale(1.1);
+  background: radial-gradient(circle at 30% 30%, #1abc9c, #16a085);
+  box-shadow: 0 0 30px rgba(46, 204, 113, 0.6);
+}
+
+.stop-btn {
+  background: radial-gradient(circle at 30% 30%, #e74c3c, #c0392b);
+  box-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+}
+
+.stop-btn:hover {
+  background: radial-gradient(circle at 30% 30%, #c0392b, #a93226);
+  transform: scale(1.1);
+}
+
+/* Optional — make it responsive on small screens */
+@media (max-width: 600px) {
+  .control-btn {
+    width: 60px;
+    height: 60px;
+    font-size: 20px;
+  }
+}
 
 /* Menu overlay */
 .menu-overlay {
