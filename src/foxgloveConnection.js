@@ -6,13 +6,14 @@ let reconnectTimer = null;
 
 /**
  * Connect to the Foxglove Bridge via WebSocket
- * @param {string} url - The WebSocket URL (e.g. ws://10.75.114.230:8765 or wss://cleandbot-ros2.ngrok.io)
+ * @param {string} url - The WebSocket URL (e.g. wss://your-ngrok-url.ngrok.io)
  * @param {function} onMessage - Callback when a new ROS message is received
+ * @param {function} onConnectionChange - Callback when connection status changes (connected: true/false)
  */
-export function connectToFoxglove(url, onMessage) {
+export function connectToFoxglove(url, onMessage, onConnectionChange) {
   if (typeof window === "undefined") {
     // 🧱 Prevent running during Vercel build
-    console.warn("⏭️ Foxglove connection skipped: not running in browser.");
+    console.warn("⚠️ Foxglove connection skipped: not running in browser.");
     return;
   }
 
@@ -35,6 +36,8 @@ export function connectToFoxglove(url, onMessage) {
 
   socket.onopen = () => {
     console.log("✅ Connected to Foxglove Bridge:", url);
+    // Notify React component that connection is successful
+    if (onConnectionChange) onConnectionChange(true);
   };
 
   socket.onmessage = (event) => {
@@ -49,26 +52,29 @@ export function connectToFoxglove(url, onMessage) {
   socket.onerror = (error) => {
     console.error("❌ Foxglove error:", error);
     if (socket && socket.readyState !== WebSocket.OPEN) {
-      attemptReconnect(url, onMessage);
+      if (onConnectionChange) onConnectionChange(false);
+      attemptReconnect(url, onMessage, onConnectionChange);
     }
   };
 
   socket.onclose = (evt) => {
     console.log("🔴 Foxglove connection closed", evt.reason || "");
-    // only auto-reconnect if user didn’t manually disconnect
-    if (socket !== null) attemptReconnect(url, onMessage);
+    // Notify React component that connection is closed
+    if (onConnectionChange) onConnectionChange(false);
+    // only auto-reconnect if user didn't manually disconnect
+    if (socket !== null) attemptReconnect(url, onMessage, onConnectionChange);
   };
 }
 
 /**
  * Attempt automatic reconnection every 5 seconds
  */
-function attemptReconnect(url, onMessage) {
+function attemptReconnect(url, onMessage, onConnectionChange) {
   if (reconnectTimer) return; // Prevent duplicate timers
   console.log("🔄 Attempting to reconnect in 5 seconds...");
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    connectToFoxglove(url, onMessage);
+    connectToFoxglove(url, onMessage, onConnectionChange);
   }, 5000);
 }
 

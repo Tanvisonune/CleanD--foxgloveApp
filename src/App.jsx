@@ -1,11 +1,12 @@
 // src/App.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import "./App.css";
 import {
   connectToFoxglove,
   sendToFoxglove,
   disconnectFoxglove,
 } from "./foxgloveConnection";
+
 const speak = (text) => {
   if ("speechSynthesis" in window) {
     const utter = new SpeechSynthesisUtterance(text);
@@ -19,13 +20,9 @@ const speak = (text) => {
 };
 
 const CleaningBotInterface = () => {
-  // 🔌 States
-  // ✅ Read from environment variable
-const defaultURL = import.meta.env.VITE_FOXGLOVE_URL || "";
-const [ipAddress, setIpAddress] = useState(defaultURL);
-const [userURL, setUserURL] = useState("");
-
-  
+  // 📌 States
+  const defaultURL = import.meta.env.VITE_FOXGLOVE_URL || "";
+  const [ipAddress, setIpAddress] = useState(defaultURL);
   const [isFoxgloveConnected, setIsFoxgloveConnected] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState(null);
   const [waterLevel, setWaterLevel] = useState(null);
@@ -39,56 +36,7 @@ const [userURL, setUserURL] = useState("");
   const [currentScreen, setCurrentScreen] = useState("dashboard");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-
-  const handleConnect = () => {
-  let url = userURL.trim();
-
-  // 🧠 Auto-upgrade to wss:// if site is https
-  if (window.location.protocol === "https:" && url.startsWith("ws://")) {
-    url = url.replace("ws://", "wss://");
-  }
-
-  console.log("🧠 Connecting to Foxglove Bridge:", url);
-
-  try {
-    const socket = new WebSocket(url);
-
-    socket.onopen = () => {
-      console.log("✅ Connected to Foxglove Bridge!");
-      setIsFoxgloveConnected(true);
-    };
-
-    socket.onclose = () => {
-      console.log("❌ Disconnected");
-      setIsFoxgloveConnected(false);
-    };
-
-    socket.onerror = (err) => {
-      console.error("⚠️ WebSocket error:", err);
-      setIsFoxgloveConnected(false);
-    };
-  } catch (err) {
-    console.error("Error creating WebSocket:", err);
-  }
-};
-
-<div style={{ textAlign: "center", marginTop: 20 }}>
-  <input
-    type="text"
-    value={userURL}
-    onChange={(e) => setUserURL(e.target.value)}
-    placeholder="Enter WSS or WS URL (e.g., ws://192.168.1.10:8765)"
-    style={{ padding: "8px", width: "80%", borderRadius: "8px" }}
-  />
-  <button
-    onClick={handleConnect}
-    style={{ marginLeft: "10px", padding: "8px 16px", borderRadius: "8px" }}
-  >
-    Connect
-  </button>
-</div>
-
-  // 🧠 Foxglove Bridge
+  // 🧠 Foxglove Message Handler
   const handleFoxgloveMessage = useCallback((msg) => {
     try {
       if (msg.topic === "/battery") setBatteryLevel(msg.data.level);
@@ -104,26 +52,48 @@ const [userURL, setUserURL] = useState("");
     }
   }, []);
 
-  useEffect(() => {
-    if (userURL && isFoxgloveConnected) {
-      connectToFoxglove(userURL, handleFoxgloveMessage);
+  // 🔌 Connection Handler
+  const handleConnect = () => {
+    if (!ipAddress.trim()) {
+      alert("Please enter the IP address or WebSocket URL first!");
+      return;
     }
-    return () => disconnectFoxglove();
-  }, [userURL, handleFoxgloveMessage, isFoxgloveConnected]);
+
+    let url = ipAddress.trim();
+
+    // 🧠 Auto-upgrade to wss:// if site is https
+    if (window.location.protocol === "https:" && url.startsWith("ws://")) {
+      url = url.replace("ws://", "wss://");
+      console.log("🔒 Auto-upgraded to secure WebSocket:", url);
+    }
+
+    console.log("🧠 Connecting to Foxglove Bridge:", url);
+
+    // Pass a callback to update connection status
+    connectToFoxglove(url, handleFoxgloveMessage, (connected) => {
+      setIsFoxgloveConnected(connected);
+    });
+  };
+
+  const handleDisconnect = () => {
+    disconnectFoxglove();
+    setIsFoxgloveConnected(false);
+    setIpAddress("");
+  };
 
   // 🕹️ Control Handlers
   const handleCleaningControl = (action) => {
-  const ok = sendToFoxglove("/clean_control", { action });
-  if (ok) {
-    const voiceMsg = {
-      start: "Starting cleaning process",
-      pause: "Pausing cleaning",
-      stop: "Stopping cleaning",
-      resume: "Resuming cleaning",
-    }[action] || `Executing ${action}`;
-    speak(voiceMsg);
-  }
-};
+    const ok = sendToFoxglove("/clean_control", { action });
+    if (ok) {
+      const voiceMsg = {
+        start: "Starting cleaning process",
+        pause: "Pausing cleaning",
+        stop: "Stopping cleaning",
+        resume: "Resuming cleaning",
+      }[action] || `Executing ${action}`;
+      speak(voiceMsg);
+    }
+  };
 
   const handleModeSelection = (mode) => {
     setCurrentMode(mode);
@@ -138,6 +108,7 @@ const [userURL, setUserURL] = useState("");
 
   const getStatusColor = (v) =>
     v === null ? "#95a5a6" : v > 70 ? "#2ecc71" : v > 40 ? "#f39c12" : "#e74c3c";
+  
   const formatValue = (v, unit = "%") => (v == null ? "--" : `${v}${unit}`);
 
   // ========================
@@ -213,9 +184,10 @@ const [userURL, setUserURL] = useState("");
                 {!isFoxgloveConnected && (
                   <input
                     type="text"
-                    placeholder="Enter IP or URL (e.g. ws://10.75.114.230:8765)"
+                    placeholder="Enter WebSocket URL (e.g., wss://your-ngrok-url.ngrok.io)"
                     value={ipAddress}
                     onChange={(e) => setIpAddress(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleConnect()}
                     style={{
                       padding: "10px 15px",
                       borderRadius: 15,
@@ -230,15 +202,7 @@ const [userURL, setUserURL] = useState("");
 
                 {!isFoxgloveConnected ? (
                   <button
-                    onClick={() => {
-                      if (!ipAddress) {
-                        alert("Please enter the IP address or WebSocket URL first!");
-                        return;
-                      }
-                      setUserURL(ipAddress);
-                      setIsFoxgloveConnected(true);
-                      connectToFoxglove(ipAddress, handleFoxgloveMessage);
-                    }}
+                    onClick={handleConnect}
                     style={{
                       background: "linear-gradient(45deg,#48dbfb,#0abde3)",
                       color: "#fff",
@@ -246,18 +210,14 @@ const [userURL, setUserURL] = useState("");
                       padding: "12px 24px",
                       borderRadius: 25,
                       fontWeight: 600,
+                      cursor: "pointer",
                     }}
                   >
                     Connect
                   </button>
                 ) : (
                   <button
-                    onClick={() => {
-                      disconnectFoxglove();
-                      setIsFoxgloveConnected(false);
-                      setUserURL("");
-                      setIpAddress("");
-                    }}
+                    onClick={handleDisconnect}
                     style={{
                       background: "linear-gradient(45deg,#e74c3c,#c0392b)",
                       color: "#fff",
@@ -265,6 +225,7 @@ const [userURL, setUserURL] = useState("");
                       padding: "12px 24px",
                       borderRadius: 25,
                       fontWeight: 600,
+                      cursor: "pointer",
                     }}
                   >
                     Disconnect
@@ -279,7 +240,7 @@ const [userURL, setUserURL] = useState("");
                   }}
                 >
                   {isFoxgloveConnected
-                    ? `Connected to ${userURL} ✅`
+                    ? `Connected to ${ipAddress} ✅`
                     : "Not Connected ❌"}
                 </p>
               </div>
@@ -287,9 +248,11 @@ const [userURL, setUserURL] = useState("");
 
             {/* STATUS CARDS */}
             <div className="status-grid">
-              {[{ label: "Battery", value: batteryLevel, icon: "🔋" },
-              { label: "Water", value: waterLevel, icon: "💧" },
-              { label: "Dust Bin", value: dustLevel, icon: "🗑️" }].map((item, i) => (
+              {[
+                { label: "Battery", value: batteryLevel, icon: "🔋" },
+                { label: "Water", value: waterLevel, icon: "💧" },
+                { label: "Dust Bin", value: dustLevel, icon: "🗑️" }
+              ].map((item, i) => (
                 <div key={i} className="glass hover status-card">
                   <div className="status-icon">{item.icon}</div>
                   <div className="status-label">{item.label}</div>
@@ -325,15 +288,18 @@ const [userURL, setUserURL] = useState("");
               {cleaningStatus === "idle" && (
                 <button
                   onClick={() => handleCleaningControl("start")}
+                  disabled={!isFoxgloveConnected}
                   style={{
-                    background: "linear-gradient(45deg,#2ecc71,#27ae60)",
+                    background: isFoxgloveConnected
+                      ? "linear-gradient(45deg,#2ecc71,#27ae60)"
+                      : "rgba(255,255,255,0.3)",
                     color: "#fff",
                     border: "none",
                     borderRadius: "50%",
                     width: 100,
                     height: 100,
                     fontSize: 32,
-                    cursor: "pointer",
+                    cursor: isFoxgloveConnected ? "pointer" : "not-allowed",
                   }}
                 >
                   ▶️
@@ -349,6 +315,7 @@ const [userURL, setUserURL] = useState("");
                       border: "none",
                       padding: "10px 20px",
                       borderRadius: 20,
+                      cursor: "pointer",
                     }}
                   >
                     ⏸️ Pause
@@ -361,6 +328,7 @@ const [userURL, setUserURL] = useState("");
                       border: "none",
                       padding: "10px 20px",
                       borderRadius: 20,
+                      cursor: "pointer",
                     }}
                   >
                     ⏹️ Stop
@@ -371,141 +339,212 @@ const [userURL, setUserURL] = useState("");
           </>
         )}
 
+        {/* ========= MODES SCREEN ========= */}
         {currentScreen === "modes" && (
-  <div className="glass hover" style={{ borderRadius: 25, padding: 40 }}>
-    <h2 style={{ color: "#fff", textAlign: "center", marginBottom: 30 }}>
-      Cleaning Modes
-    </h2>
+          <div className="glass hover" style={{ borderRadius: 25, padding: 40 }}>
+            <h2 style={{ color: "#fff", textAlign: "center", marginBottom: 30 }}>
+              Cleaning Modes
+            </h2>
 
-    {/* === MODE CARDS === */}
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-        gap: 20,
-      }}
-    >
-      {[
-        { id: "auto", name: "Auto Clean", icon: "🧹", desc: "Full room cleaning", time: "45 min" },
-        { id: "spot", name: "Spot Clean", icon: "🎯", desc: "Clean specific area", time: "5-10 min" },
-        { id: "edge", name: "Edge Clean", icon: "📐", desc: "Corners & walls only", time: "20 min" },
-        { id: "mopping", name: "Mopping", icon: "🧽", desc: "Wet mopping mode", time: "40 min" },
-        { id: "dock", name: "Dock Station", icon: "🏠", desc: "Return & charge", time: "2-5 min" },
-        { id: "manual", name: "Manual Drive", icon: "🎮", desc: "Full manual control", time: "User controlled" },
-      ].map((mode) => (
-        <div
-          key={mode.id}
-          onClick={() => handleModeSelection(mode.id)}
-          className={`hover glass ${
-            currentMode === mode.id ? "active-mode" : ""
-          }`}
-          style={{
-            borderRadius: 20,
-            padding: "20px 15px",
-            textAlign: "center",
-            cursor: "pointer",
-            background:
-              currentMode === mode.id
-                ? "linear-gradient(45deg, #ff9ff3, #f368e0)"
-                : "rgba(255, 255, 255, 0.1)",
-            boxShadow:
-              currentMode === mode.id
-                ? "0 0 15px rgba(255, 200, 255, 0.6)"
-                : "0 0 5px rgba(0,0,0,0.2)",
-            transition: "0.3s ease",
-          }}
-        >
-          <div style={{ fontSize: 36, marginBottom: 10 }}>{mode.icon}</div>
-          <h3 style={{ color: "#fff", marginBottom: 5 }}>{mode.name}</h3>
-          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 14, margin: 0 }}>
-            {mode.desc}
-          </p>
-          <p
-            style={{
-              color: "rgba(255,255,255,0.5)",
-              fontSize: 13,
-              marginTop: 8,
-            }}
-          >
-            ⏱ {mode.time}
-          </p>
-        </div>
-      ))}
-    </div>
+            {/* === MODE CARDS === */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: 20,
+              }}
+            >
+              {[
+                { id: "auto", name: "Auto Clean", icon: "🧹", desc: "Full room cleaning", time: "45 min" },
+                { id: "spot", name: "Spot Clean", icon: "🎯", desc: "Clean specific area", time: "5-10 min" },
+                { id: "edge", name: "Edge Clean", icon: "📐", desc: "Corners & walls only", time: "20 min" },
+                { id: "mopping", name: "Mopping", icon: "🧽", desc: "Wet mopping mode", time: "40 min" },
+                { id: "dock", name: "Dock Station", icon: "🏠", desc: "Return & charge", time: "2-5 min" },
+                { id: "manual", name: "Manual Drive", icon: "🎮", desc: "Full manual control", time: "User controlled" },
+              ].map((mode) => (
+                <div
+                  key={mode.id}
+                  onClick={() => handleModeSelection(mode.id)}
+                  className={`hover glass ${
+                    currentMode === mode.id ? "active-mode" : ""
+                  }`}
+                  style={{
+                    borderRadius: 20,
+                    padding: "20px 15px",
+                    textAlign: "center",
+                    cursor: "pointer",
+                    background:
+                      currentMode === mode.id
+                        ? "linear-gradient(45deg, #ff9ff3, #f368e0)"
+                        : "rgba(255, 255, 255, 0.1)",
+                    boxShadow:
+                      currentMode === mode.id
+                        ? "0 0 15px rgba(255, 200, 255, 0.6)"
+                        : "0 0 5px rgba(0,0,0,0.2)",
+                    transition: "0.3s ease",
+                  }}
+                >
+                  <div style={{ fontSize: 36, marginBottom: 10 }}>{mode.icon}</div>
+                  <h3 style={{ color: "#fff", marginBottom: 5 }}>{mode.name}</h3>
+                  <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 14, margin: 0 }}>
+                    {mode.desc}
+                  </p>
+                  <p
+                    style={{
+                      color: "rgba(255,255,255,0.5)",
+                      fontSize: 13,
+                      marginTop: 8,
+                    }}
+                  >
+                    ⏱ {mode.time}
+                  </p>
+                </div>
+              ))}
+            </div>
 
-    {/* === SUCTION POWER === */}
-    <div style={{ marginTop: 40, textAlign: "center" }}>
-      <h3 style={{ color: "#fff", marginBottom: 15 }}>Suction Power</h3>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          gap: 20,
-          flexWrap: "wrap",
-        }}
-      >
-        {[
-          { level: "low", icon: "🍃", label: "Low" },
-          { level: "medium", icon: "⚡", label: "Medium" },
-          { level: "turbo", icon: "🚀", label: "Turbo" },
-        ].map((s) => (
-          <button
-            key={s.level}
-            onClick={() => sendToFoxglove("/set_suction", { level: s.level })}
-            style={{
-              background:
-                currentMode === s.level
-                  ? "linear-gradient(45deg,#74b9ff,#0984e3)"
-                  : "rgba(255,255,255,0.15)",
-              color: "#fff",
-              border: "none",
-              borderRadius: 15,
-              padding: "10px 25px",
-              fontWeight: 600,
-              transition: "0.3s",
-              cursor: "pointer",
-            }}
-          >
-            {s.icon} {s.label}
-          </button>
-        ))}
-      </div>
-    </div>
+            {/* === SUCTION POWER === */}
+            <div style={{ marginTop: 40, textAlign: "center" }}>
+              <h3 style={{ color: "#fff", marginBottom: 15 }}>Suction Power</h3>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: 20,
+                  flexWrap: "wrap",
+                }}
+              >
+                {[
+                  { level: "low", icon: "🍃", label: "Low" },
+                  { level: "medium", icon: "⚡", label: "Medium" },
+                  { level: "turbo", icon: "🚀", label: "Turbo" },
+                ].map((s) => (
+                  <button
+                    key={s.level}
+                    onClick={() => sendToFoxglove("/set_suction", { level: s.level })}
+                    style={{
+                      background:
+                        currentMode === s.level
+                          ? "linear-gradient(45deg,#74b9ff,#0984e3)"
+                          : "rgba(255,255,255,0.15)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 15,
+                      padding: "10px 25px",
+                      fontWeight: 600,
+                      transition: "0.3s",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {s.icon} {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-    {/* === MANUAL CONTROL (Only shows when Manual Drive is selected) === */}
-    {currentMode === "manual" && (
-      <div
-        className="glass hover"
-        style={{
-          borderRadius: 20,
-          padding: 20,
-          marginTop: 40,
-          textAlign: "center",
-        }}
-      >
-        <h3 style={{ color: "#fff" }}>Manual Control</h3>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3,60px)",
-            justifyContent: "center",
-            gap: 10,
-            marginTop: 10,
-          }}
-        >
-          <div></div>
-          <button onClick={() => handleManualDrive("forward")}>⬆️</button>
-          <div></div>
-          <button onClick={() => handleManualDrive("left")}>⬅️</button>
-          <button onClick={() => handleManualDrive("stop")}>⏹️</button>
-          <button onClick={() => handleManualDrive("right")}>➡️</button>
-          <div></div>
-          <button onClick={() => handleManualDrive("backward")}>⬇️</button>
-        </div>
-      </div>
-    )}
-  </div>
-)}
+            {/* === MANUAL CONTROL (Only shows when Manual Drive is selected) === */}
+            {currentMode === "manual" && (
+              <div
+                className="glass hover"
+                style={{
+                  borderRadius: 20,
+                  padding: 20,
+                  marginTop: 40,
+                  textAlign: "center",
+                }}
+              >
+                <h3 style={{ color: "#fff" }}>Manual Control</h3>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3,60px)",
+                    justifyContent: "center",
+                    gap: 10,
+                    marginTop: 10,
+                  }}
+                >
+                  <div></div>
+                  <button 
+                    onClick={() => handleManualDrive("forward")}
+                    style={{
+                      background: "rgba(255,255,255,0.2)",
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      color: "#fff",
+                      fontSize: 24,
+                      width: 60,
+                      height: 60,
+                      borderRadius: 15,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⬆️
+                  </button>
+                  <div></div>
+                  <button 
+                    onClick={() => handleManualDrive("left")}
+                    style={{
+                      background: "rgba(255,255,255,0.2)",
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      color: "#fff",
+                      fontSize: 24,
+                      width: 60,
+                      height: 60,
+                      borderRadius: 15,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⬅️
+                  </button>
+                  <button 
+                    onClick={() => handleManualDrive("stop")}
+                    style={{
+                      background: "rgba(255,255,255,0.2)",
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      color: "#fff",
+                      fontSize: 24,
+                      width: 60,
+                      height: 60,
+                      borderRadius: 15,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⏹️
+                  </button>
+                  <button 
+                    onClick={() => handleManualDrive("right")}
+                    style={{
+                      background: "rgba(255,255,255,0.2)",
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      color: "#fff",
+                      fontSize: 24,
+                      width: 60,
+                      height: 60,
+                      borderRadius: 15,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ➡️
+                  </button>
+                  <div></div>
+                  <button 
+                    onClick={() => handleManualDrive("backward")}
+                    style={{
+                      background: "rgba(255,255,255,0.2)",
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      color: "#fff",
+                      fontSize: 24,
+                      width: 60,
+                      height: 60,
+                      borderRadius: 15,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⬇️
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ========= MAP SCREEN ========= */}
         {currentScreen === "map" && (
@@ -541,10 +580,12 @@ const [userURL, setUserURL] = useState("");
               ×
             </button>
             <div className="menu-items">
-              {[{ id: "dashboard", icon: "🏠", label: "Home" },
-              { id: "modes", icon: "🎮", label: "Modes" },
-              { id: "map", icon: "🗺️", label: "Map" },
-              { id: "history", icon: "📊", label: "History" }].map((tab) => (
+              {[
+                { id: "dashboard", icon: "🏠", label: "Home" },
+                { id: "modes", icon: "🎮", label: "Modes" },
+                { id: "map", icon: "🗺️", label: "Map" },
+                { id: "history", icon: "📊", label: "History" }
+              ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => {
